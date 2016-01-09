@@ -2,7 +2,10 @@ __author__ = 'basin'
 from sklearn.datasets import load_svmlight_file
 from sklearn.grid_search import GridSearchCV
 from sklearn.svm import SVC
+from sklearn.preprocessing import StandardScaler
+
 X, y = load_svmlight_file('./data/train.libsvm')
+X = StandardScaler().fit_transform(X)
 tuned_parameters = [
     {'C': [1, 10, 100, 1000], 'kernel': ['linear']},
     {'C': [1, 10, 100, 1000], 'gamma': [0.001, 0.0001], 'kernel': ['rbf']},
