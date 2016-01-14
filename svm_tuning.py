@@ -29,7 +29,7 @@ def param_select(X, y):
 
 def tuning(X, y):
     clf = SVC(C=1.0, kernel='rbf', gamma=0.001, class_weight='balanced', verbose=True,
-              random_state=0)
+              random_state=0, probability=True)
     skf = StratifiedShuffleSplit(y, n_iter=2, test_size=0.2, random_state=0)
     fold = 1
     for train_index, val_index in skf:
