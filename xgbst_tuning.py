@@ -1,11 +1,15 @@
 __author__ = 'basin'
 from sklearn.datasets import load_svmlight_file
 from sklearn.grid_search import GridSearchCV
-from sklearn.cross_validation import StratifiedKFold
 from sklearn.cross_validation import StratifiedShuffleSplit
+from sklearn.feature_selection import SelectPercentile
+from sklearn.feature_selection import f_classif
+
+from time import clock
 
 import xgboost as xgb
 import pandas as pd
+import os
 
 
 def param_select(X, y):
@@ -29,7 +33,17 @@ def gen_xgboost(X, y, test_X, test_uid):
                             objective='binary:logistic', learning_rate=0.02,
                             gamma=0.1, min_child_weight=3, max_delta_step=5,
                             subsample=0.6, colsample_bytree=0.4, colsample_bylevel=1,
-                            reg_alpha=0, reg_lambda=3000)
+                            reg_alpha=10, reg_lambda=3000)
+    params = clf.get_params()
+    print 'params:', params
+    dir_name = '{0}_{1}_{2}_{3}_{4}_{5}_{6}_{7}_{8}_{9}_{10}'.format(
+        str(params['scale_pos_weight']), str(params['max_depth']),
+        str(params['learning_rate']), str(params['gamma']), str(params['min_child_weight']),
+        str(params['max_delta_step']), str(params['subsample']), str(params['colsample_bytree']),
+        str(params['colsample_bylevel']), str(params['reg_alpha']), str(params['reg_lambda']))
+    if not os.path.exists('./data/results/' + dir_name):
+        os.mkdir('./data/results/' + dir_name)
+
     skf = StratifiedShuffleSplit(y, n_iter=2, test_size=0.2, random_state=0)
 
     # skf = StratifiedKFold(y, n_folds=2, shuffle=True, random_state=0)
@@ -48,32 +62,42 @@ def gen_xgboost(X, y, test_X, test_uid):
         test_result.uid = test_uid
         test_result.score = test_0_1.predict_1
         # remember to edit xgb.csv , add ""
-        test_result.to_csv("./data/results/res_xgb_" + str(fold) + ".csv", index=None,
-                           encoding='utf-8')
+        test_result.to_csv("./data/results/" + dir_name + "/res_xgb_" + str(fold) + ".csv",
+                           index=None, encoding='utf-8')
         fold += 1
 
 
 def tuning(X, y):
-    clf = xgb.XGBClassifier(n_estimators=20000, scale_pos_weight=1.0, max_depth=8,
+    clf = xgb.XGBClassifier(n_estimators=20000, scale_pos_weight=1.0, max_depth=6,
                             objective='binary:logistic', learning_rate=0.02,
-                            gamma=0.1, min_child_weight=3, max_delta_step=5,
+                            gamma=0.5, min_child_weight=3, max_delta_step=5,
                             subsample=0.6, colsample_bytree=0.4, colsample_bylevel=1,
                             reg_alpha=0, reg_lambda=3000)
-    skf = StratifiedKFold(y, n_folds=5, shuffle=True, random_state=0)
+    print 'parameters:', clf.get_params()
+    skf = StratifiedShuffleSplit(y, n_iter=2, test_size=0.2, random_state=0)
     fold = 1
+    # feature selection
+    feat_sel = SelectPercentile(score_func=f_classif, percentile=70)
     for train_index, val_index in skf:
         print "fold:", fold
-        fold += 1
         X_train, X_val = X[train_index], X[val_index]
         y_train, y_val = y[train_index], y[val_index]
+        feat_sel.fit(X_train, y_train)
+        X_train_new = feat_sel.transform(X_train)
+        X_val_new = feat_sel.transform(X_val)
         # eval_metric use the parameters in XGBoost doc
-        clf.fit(X_train, y_train, eval_set=[(X_train, y_train), (X_val, y_val)],
-                eval_metric='auc', early_stopping_rounds=1000, verbose=True)
+        clf.fit(X_train_new, y_train, eval_set=[(X_train_new, y_train), (X_val_new, y_val)],
+                eval_metric='auc', early_stopping_rounds=1000, verbose=False)
+        print "best_score", clf.best_score
+        fold += 1
 
 
 if __name__ == "__main__":
-    X, y = load_svmlight_file('./data/train.libsvm')
-    test_X, fake_y = load_svmlight_file('./data/test.libsvm')
-    test_uid = pd.read_csv('./data/test_x.csv')['uid']
-    gen_xgboost(X, y, test_X, test_uid)
-    # tuning(X, y)
+    start = clock()
+    X, y = load_svmlight_file('./data/svmlight/train.libsvm')
+    # test_X, fake_y = load_svmlight_file('./data/svmlight/test.libsvm')
+    # test_uid = pd.read_csv('./data/test_x.csv')['uid']
+    # gen_xgboost(X, y, test_X, test_uid)
+    tuning(X, y)
+    finish = clock()
+    print 'run time:', (finish - start) / 600000.0
