@@ -5,8 +5,7 @@ from sklearn.cross_validation import StratifiedShuffleSplit
 from sklearn.feature_selection import SelectPercentile
 from sklearn.feature_selection import f_classif
 
-from time import clock
-
+import time
 import xgboost as xgb
 import pandas as pd
 import os
@@ -44,7 +43,7 @@ def gen_xgboost(X, y, test_X, test_uid):
     if not os.path.exists('./data/results/' + dir_name):
         os.mkdir('./data/results/' + dir_name)
 
-    skf = StratifiedShuffleSplit(y, n_iter=2, test_size=0.2, random_state=0)
+    skf = StratifiedShuffleSplit(y, n_iter=1, test_size=0.25, random_state=0)
 
     # skf = StratifiedKFold(y, n_folds=2, shuffle=True, random_state=0)
     fold = 1
@@ -67,37 +66,29 @@ def gen_xgboost(X, y, test_X, test_uid):
         fold += 1
 
 
-def tuning(X, y):
+def tuning_1(X, y):
     clf = xgb.XGBClassifier(n_estimators=20000, scale_pos_weight=1.0, max_depth=6,
                             objective='binary:logistic', learning_rate=0.02,
                             gamma=0.5, min_child_weight=3, max_delta_step=5,
-                            subsample=0.6, colsample_bytree=0.4, colsample_bylevel=1,
-                            reg_alpha=0, reg_lambda=3000)
+                            subsample=0.8, colsample_bytree=0.4, colsample_bylevel=1,
+                            reg_alpha=0, reg_lambda=3000, nthread=-1)
     print 'parameters:', clf.get_params()
-    skf = StratifiedShuffleSplit(y, n_iter=2, test_size=0.2, random_state=0)
-    fold = 1
-    # feature selection
-    feat_sel = SelectPercentile(score_func=f_classif, percentile=70)
+    skf = StratifiedShuffleSplit(y, n_iter=1, test_size=0.25, random_state=0)
     for train_index, val_index in skf:
-        print "fold:", fold
         X_train, X_val = X[train_index], X[val_index]
         y_train, y_val = y[train_index], y[val_index]
-        feat_sel.fit(X_train, y_train)
-        X_train_new = feat_sel.transform(X_train)
-        X_val_new = feat_sel.transform(X_val)
         # eval_metric use the parameters in XGBoost doc
-        clf.fit(X_train_new, y_train, eval_set=[(X_train_new, y_train), (X_val_new, y_val)],
-                eval_metric='auc', early_stopping_rounds=1000, verbose=False)
+        clf.fit(X_train, y_train, eval_set=[(X_train, y_train), (X_val, y_val)],
+                eval_metric='auc', early_stopping_rounds=1000, verbose=True)
         print "best_score", clf.best_score
-        fold += 1
 
 
 if __name__ == "__main__":
-    start = clock()
+    start = time.time()
     X, y = load_svmlight_file('./data/svmlight/train.libsvm')
     # test_X, fake_y = load_svmlight_file('./data/svmlight/test.libsvm')
     # test_uid = pd.read_csv('./data/test_x.csv')['uid']
     # gen_xgboost(X, y, test_X, test_uid)
-    tuning(X, y)
-    finish = clock()
-    print 'run time:', (finish - start) / 600000.0
+    tuning_1(X, y)
+    end = time.time()
+    print 'run time(s):', (end - start)
