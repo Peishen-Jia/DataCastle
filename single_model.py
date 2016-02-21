@@ -31,14 +31,19 @@ def gen_xgboost(X, y, test_X, test_uid, dir_name, file_name):
                             colsample_bylevel=params['colsample_bylevel'],
                             reg_alpha=params['reg_alpha'], reg_lambda=params['reg_lambda'])
 
-    skf = StratifiedShuffleSplit(y, n_iter=1, test_size=0.25, random_state=0)
+    skf = StratifiedShuffleSplit(y, n_iter=5, test_size=0.25, random_state=0)
 
+    fold = 1
     for train_index, val_index in skf:
+        if fold != 2:
+            fold += 1
+            continue
+
         X_train, X_val = X[train_index], X[val_index]
         y_train, y_val = y[train_index], y[val_index]
         # eval_metric use the parameters in XGBoost doc
         clf.fit(X_train, y_train, eval_set=[(X_train, y_train), (X_val, y_val)],
-                eval_metric='auc', early_stopping_rounds=1000, verbose=False)
+                eval_metric='auc', early_stopping_rounds=1000, verbose=True)
         # predict probability
         test_0_1 = pd.DataFrame(clf.predict_proba(test_X, ntree_limit=clf.best_iteration),
                                 columns=["predict_0", "predict_1"])
@@ -49,6 +54,7 @@ def gen_xgboost(X, y, test_X, test_uid, dir_name, file_name):
         test_result.to_csv("./models/xgbst/" + file_name + ".csv", index=None, encoding='utf-8')
         # save the model to disk
         joblib.dump(clf, './models/xgbst/' + file_name + '.model')
+        fold += 1
 
 
 if __name__ == "__main__":
